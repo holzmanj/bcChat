@@ -20,11 +20,9 @@ def chat_server():
 
     SOCKET_LIST.append(server_socket)
 
-    print("Chat server started on port %s" % str(PORT))
+    print("Server started on port %s" % str(PORT))
 
     while True:
-        # get the list sockets which are ready to be read through select
-        # 4th arg, time_out = 0 : poll and never block
         ready_to_read, ready_to_write, in_error = select.select(SOCKET_LIST, [], [], 0)
 
         for sock in ready_to_read:

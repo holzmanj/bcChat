@@ -14,7 +14,7 @@ connection_thread = None
 
 # Attempts to connect to connect to host and starts new thread on success
 def connect_to_server():
-    global connected, sock, connection_thread, cipher
+    global connected, sock, connection_thread
     if connected:
         disconnect_from_server()
         time.sleep(1)
@@ -113,6 +113,7 @@ def handle_command(command):
                           '\tAvailable commands:\n'
                           '\t\t/connect\n'
                           '\t\t/disconnect\n'
+                          '\t\t/getusers\n'
                           '\t\t/name\n'
                           '\t\t/whisper\n')
         else:
@@ -122,6 +123,10 @@ def handle_command(command):
                 append_to_log('\t/disconnect - breaks connection to current server.\n')
             elif args[1] == 'name':
                 append_to_log('\t/name <name> - sets new display name for user.\n')
+            elif args[1] == 'getusers':
+                append_to_log('\t/getusers - gets list of all currently connected users on a server.\n')
+            elif args[1] == 'whisper':
+                append_to_log('\t/whisper <user> <message> - sends a private message to another user.\n')
             else:
                 append_to_log('\tUnknown command: %s\nRefer to /help for a list of commands.\n' % args[0])
     elif args[0] == 'connect':
@@ -179,6 +184,7 @@ root = tkinter.Tk()
 root.minsize(200, 300)
 root.bind('<Return>', send_message)
 root.protocol('WM_DELETE_WINDOW', on_exit)
+root.wm_title('')
 
 
 # Chat log
@@ -190,5 +196,8 @@ log.pack(expand=True, fill=tkinter.BOTH)
 user_input = tkinter.Entry(root, exportselection=0, width=100, relief=tkinter.FLAT, bd=5, bg='#161416', fg='#ffffff',
                            insertwidth=1, font=('Consolas', 10), insertbackground='#ffffff')
 user_input.pack(side=tkinter.BOTTOM, fill=tkinter.X)
+user_input.focus_set()
+
+append_to_log('')
 
 root.mainloop()
