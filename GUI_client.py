@@ -72,6 +72,15 @@ def send_message(event):
     user_input.delete(0, len(msg))
 
 
+# Sends private message to single user on server
+def send_whisper(user, message):
+    if connected:
+        message = message.split(None, 2)[2]
+        sock.send(bytes('/whisper %s %s' % (user, message), encoding='UTF-8'))
+    else:
+        append_to_log('\tYou are not connected to a server.\n')
+
+
 # Changes the user's display name
 def change_name(name):
     global USER_NAME
@@ -85,6 +94,14 @@ def change_name(name):
         append_to_log('\tName too long.  Max 20 characters.\n')
 
 
+# Gets list of currently connected users from server
+def get_users():
+    if connected:
+        sock.send(bytes('/getusers', encoding='UTF-8'))
+    else:
+        append_to_log('\tYou are not connected to a server.\n')
+
+
 # Parses client-side commands
 def handle_command(command):
     global HOST, connected
@@ -92,11 +109,12 @@ def handle_command(command):
     args = command.split()
     if args[0] == 'help':
         if len(args) == 1:
-            append_to_log('\tAvailable commands:\n'
-                          '\t(For details about a specific commend, enter /help <command>)\n'
-                          '\t/connect\n'
-                          '\t/disconnect\n'
-                          '\t/name\n')
+            append_to_log('\tFor details about a specific commend, enter /help <command>\n'
+                          '\tAvailable commands:\n'
+                          '\t\t/connect\n'
+                          '\t\t/disconnect\n'
+                          '\t\t/name\n'
+                          '\t\t/whisper\n')
         else:
             if args[1] == 'connect':
                 append_to_log('\t/connect <hostname> - creates connection to specified server.\n')
@@ -118,6 +136,15 @@ def handle_command(command):
     elif args[0] == 'name':
         if len(args) > 1:
             change_name(args[1])
+        else:
+            append_to_log('\tIncorrect format.  Refer to /help for assistance.\n')
+    # Gets list of users connected to server
+    elif args[0] == 'getusers':
+        get_users()
+    # Sends private message to a single user
+    elif args[0] == 'whisper':
+        if len(args) > 2:
+            send_whisper(args[1], command)
         else:
             append_to_log('\tIncorrect format.  Refer to /help for assistance.\n')
     else:
@@ -156,7 +183,7 @@ root.protocol('WM_DELETE_WINDOW', on_exit)
 
 # Chat log
 log = tkinter.Text(root, state='disabled', height=15, bg='#0a0909', fg='#ffffff', relief=tkinter.FLAT,
-                   font=('Consolas', 10), tabs=20)
+                   font=('Consolas', 10), tabs=20, wrap=tkinter.WORD)
 log.pack(expand=True, fill=tkinter.BOTH)
 
 # Text field for entering messages

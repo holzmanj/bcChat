@@ -2,6 +2,7 @@ import sys
 import socket
 import select
 from time import sleep
+import traceback
 
 HOST = ''
 SOCKET_LIST = []
@@ -56,7 +57,7 @@ def chat_server():
                         remove_client(sock, server_socket)
                 except:
                     remove_client(sock, server_socket)
-                    print('Exception:', sys.exc_info()[0])
+                    traceback.print_exc()
                     sleep(0.1)
                     continue
 
@@ -66,20 +67,47 @@ def handle_command(c_sock, s_sock, command):
     args = command.split()
 
     if args[0] == 'name':
-        # Checks for name collisions
-        if args[1] in USER_NAMES.values():
-            direct_message(c_sock, '\tThere is already a user with the name \"%s\" on this server.\n' % args[1], s_sock)
-            # Newly joined user
-            if USER_NAMES['%s:%s' % c_sock.getpeername()] is None:
-                direct_message(c_sock, '\tPlease set a new display name with \"/name <name>\"\n'
-                                       '\tYou will not be able to send messages until you select a new name.\n', s_sock)
-            return
+        change_name(args[1], c_sock, s_sock)
 
+    elif args[0] == 'getusers':
+        user_list = ', '.join(USER_NAMES.values())
+        direct_message(c_sock, '\tCurrently connected users: %s\n' % user_list, s_sock)
+
+    elif args[0] == 'whisper':
+        send_whisper(c_sock, s_sock, args[1], command.split(None, 2)[2])
+
+
+# Allows user to change their display name
+def change_name(name, c_sock, s_sock):
+    # Checks for name collisions
+    if name in USER_NAMES.values():
+        direct_message(c_sock, '\tThere is already a user with the name \"%s\" on this server.\n' % name, s_sock)
+        # Newly joined user
         if USER_NAMES['%s:%s' % c_sock.getpeername()] is None:
-            broadcast(s_sock, '%s has joined the server\n' % args[1])
-        else:
-            broadcast(s_sock, '%s changed his name to %s\n' % (USER_NAMES['%s:%s' % c_sock.getpeername()], args[1]))
-        USER_NAMES['%s:%s' % c_sock.getpeername()] = args[1]
+            direct_message(c_sock, '\tPlease set a new display name with \"/name <name>\"\n'
+                                   '\tYou will not be able to send messages until you select a new name.\n', s_sock)
+        return
+
+    if USER_NAMES['%s:%s' % c_sock.getpeername()] is None:
+        broadcast(s_sock, '%s has joined the server\n' % name)
+    else:
+        broadcast(s_sock, '%s changed his name to %s\n' % (USER_NAMES['%s:%s' % c_sock.getpeername()], name))
+    USER_NAMES['%s:%s' % c_sock.getpeername()] = name
+
+
+# Allows user to send direct message to another user
+def send_whisper(c_sock, s_sock, user, message):
+    if user in USER_NAMES.values():
+        address = list(USER_NAMES.keys())[list(USER_NAMES.values()).index(user)]
+
+        for u_sock in SOCKET_LIST:
+            if u_sock != s_sock:
+                if '%s:%s' % u_sock.getpeername() == address:
+                    sender = USER_NAMES['%s:%s' % c_sock.getpeername()]
+                    direct_message(u_sock, '{%s -> %s} %s' % (sender, user, message), s_sock)
+                    direct_message(c_sock, '{%s -> %s} %s' % (sender, user, message), s_sock)
+    else:
+        direct_message(c_sock, '\tThere is no user named \"%s\" on this server.\n' % user, s_sock)
 
 
 # Send message to all clients
