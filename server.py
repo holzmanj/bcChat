@@ -44,8 +44,13 @@ def chat_server():
                         if data[0] == '/':
                             handle_command(sock, server_socket, data[1:])
                         else:
-                            broadcast(server_socket, data)
-                            print(data, end='')
+                            # ensure user has a name on the server
+                            if USER_NAMES['%s:%s' % sock.getpeername()] is None:
+                                direct_message(sock, '\tYou cannot send messages without first changing your name.\n',
+                                               server_socket)
+                            else:
+                                broadcast(server_socket, data)
+                                print(data, end='')
                     else:
                         # remove broken socket
                         remove_client(sock, server_socket)
@@ -61,6 +66,15 @@ def handle_command(c_sock, s_sock, command):
     args = command.split()
 
     if args[0] == 'name':
+        # Checks for name collisions
+        if args[1] in USER_NAMES.values():
+            direct_message(c_sock, '\tThere is already a user with the name \"%s\" on this server.\n' % args[1], s_sock)
+            # Newly joined user
+            if USER_NAMES['%s:%s' % c_sock.getpeername()] is None:
+                direct_message(c_sock, '\tPlease set a new display name with \"/name <name>\"\n'
+                                       '\tYou will not be able to send messages until you select a new name.\n', s_sock)
+            return
+
         if USER_NAMES['%s:%s' % c_sock.getpeername()] is None:
             broadcast(s_sock, '%s has joined the server\n' % args[1])
         else:
@@ -82,6 +96,17 @@ def broadcast(server_socket, message):
                 remove_client(sock, server_socket)
 
 
+# Send a message to a single connected client
+def direct_message(c_sock, message, server_socket):
+    message = bytes(message, encoding='UTF-8')
+    try:
+        c_sock.send(message)
+    except:
+        # broken socket connection
+        print('Connection to a client was broken.')
+        remove_client(c_sock, server_socket)
+
+
 # Disconnects socket and removes data relevant to client
 def remove_client(c_sock, s_sock):
     if c_sock in SOCKET_LIST:
@@ -89,6 +114,7 @@ def remove_client(c_sock, s_sock):
     broadcast(s_sock, "%s has disconnected\n" % USER_NAMES['%s:%s' % c_sock.getpeername()])
     address = '%s:%s' % c_sock.getpeername()
     print("%s (%s) has disconnected" % (address, USER_NAMES[address]))
+    USER_NAMES.pop(address, None)
     c_sock.close()
 
 

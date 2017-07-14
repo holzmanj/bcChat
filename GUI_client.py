@@ -1,7 +1,6 @@
 import tkinter
 import socket
 from threading import Thread
-import sys
 import time
 import traceback
 
@@ -15,7 +14,7 @@ connection_thread = None
 
 # Attempts to connect to connect to host and starts new thread on success
 def connect_to_server():
-    global connected, sock, connection_thread
+    global connected, sock, connection_thread, cipher
     if connected:
         disconnect_from_server()
         time.sleep(1)
@@ -24,14 +23,14 @@ def connect_to_server():
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.settimeout(1)
         sock.connect((HOST, PORT))
-        append_to_log('Connected to %s\n' % HOST)
+        append_to_log('\tConnected to %s\n' % HOST)
         sock.send(bytes('/name %s' % USER_NAME, encoding='UTF-8'))
         connected = True
-        # Start listening to server in seperate thread
+        # Start listening to server in separate thread
         connection_thread = Thread(target=listen_to_server)
         connection_thread.start()
     except:
-        append_to_log('Connection failed.\n')
+        append_to_log('\tConnection failed.\n')
         traceback.print_exc()
 
 
@@ -41,7 +40,7 @@ def disconnect_from_server():
     if connected:
         connected = False
     else:
-        append_to_log('You are not connected to a server.\n')
+        append_to_log('\tYou are not connected to a server.\n')
 
 
 # Adds message to chat log sans newline
@@ -58,6 +57,7 @@ def send_message(event):
 
     # Client-side commands indicated by '/' prefix
     if msg[0] == '/':
+        append_to_log(msg + '\n')
         handle_command(msg[1:])
         user_input.delete(0, len(msg))
         return
@@ -80,9 +80,9 @@ def change_name(name):
         if connected:
             sock.send(bytes('/name %s' % name, encoding='UTF-8'))
         else:
-            append_to_log('Display name changed to \"%s\"\n' % name)
+            append_to_log('\tDisplay name changed to \"%s\"\n' % name)
     else:
-        append_to_log('Name too long.  Max 20 characters.\n')
+        append_to_log('\tName too long.  Max 20 characters.\n')
 
 
 # Parses client-side commands
@@ -92,26 +92,26 @@ def handle_command(command):
     args = command.split()
     if args[0] == 'help':
         if len(args) == 1:
-            append_to_log('Available commands:\n'
-                          '(For details about a specific commend, enter /help <command>)\n'
-                          '/connect\n'
-                          '/disconnect\n'
-                          '/name\n')
+            append_to_log('\tAvailable commands:\n'
+                          '\t(For details about a specific commend, enter /help <command>)\n'
+                          '\t/connect\n'
+                          '\t/disconnect\n'
+                          '\t/name\n')
         else:
             if args[1] == 'connect':
-                append_to_log('/connect <hostname> - creates connection to specified server.\n')
+                append_to_log('\t/connect <hostname> - creates connection to specified server.\n')
             elif args[1] == 'disconnect':
-                append_to_log('/disconnect - breaks connection to current server.\n')
+                append_to_log('\t/disconnect - breaks connection to current server.\n')
             elif args[1] == 'name':
-                append_to_log('/name <name> - sets new display name for user.\n')
+                append_to_log('\t/name <name> - sets new display name for user.\n')
             else:
-                append_to_log('Unknown command: %s\nRefer to /help for a list of commands.\n' % args[0])
+                append_to_log('\tUnknown command: %s\nRefer to /help for a list of commands.\n' % args[0])
     elif args[0] == 'connect':
         if len(args) > 1:
             HOST = args[1]
             connect_to_server()
         else:
-            append_to_log('Incorrect format.  Refer to /help for assistance.\n')
+            append_to_log('\tIncorrect format.  Refer to /help for assistance.\n')
     elif args[0] == 'disconnect':
         disconnect_from_server()
     # Changes user display name
@@ -119,9 +119,9 @@ def handle_command(command):
         if len(args) > 1:
             change_name(args[1])
         else:
-            append_to_log('Incorrect format.  Refer to /help for assistance.\n')
+            append_to_log('\tIncorrect format.  Refer to /help for assistance.\n')
     else:
-        append_to_log('Unknown command: %s\nRefer to /help for a list of commands.\n' % args[0])
+        append_to_log('\tUnknown command: %s\nRefer to /help for a list of commands.\n' % args[0])
 
 
 # Receives messages from server
@@ -131,13 +131,13 @@ def listen_to_server():
         try:
             data = sock.recv(1024)
             if not data:
-                append_to_log('Server has disconnected\n')
+                append_to_log('\tServer has disconnected\n')
                 connected = False
             else:
                 append_to_log(data.decode(encoding='UTF-8'))
         except socket.timeout:
             continue
-    append_to_log('Disconnecting from server %s\n' % sock.getpeername()[0])
+    append_to_log('\tDisconnecting from server %s\n' % sock.getpeername()[0])
     sock.close()
 
 
@@ -156,7 +156,7 @@ root.protocol('WM_DELETE_WINDOW', on_exit)
 
 # Chat log
 log = tkinter.Text(root, state='disabled', height=15, bg='#0a0909', fg='#ffffff', relief=tkinter.FLAT,
-                   font=('Consolas', 10))
+                   font=('Consolas', 10), tabs=20)
 log.pack(expand=True, fill=tkinter.BOTH)
 
 # Text field for entering messages
