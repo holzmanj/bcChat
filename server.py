@@ -35,7 +35,6 @@ def chat_server():
                 USER_NAMES['%s:%s' % addr] = None
                 USER_COLORS['%s:%s' % addr] = None
                 send_user_info(sockfd, server_socket)
-                broadcast(server_socket, '/userinfo [%s,user,#ffffff]' % addr)
 
             # Existing client sends message or disconnects
             else:
@@ -52,7 +51,8 @@ def chat_server():
                                 direct_message(sock, '\tYou cannot send messages without first changing your name.\n',
                                                server_socket)
                             else:
-                                broadcast(server_socket, data)
+                                peername = sock.getpeername()
+                                broadcast(server_socket, '{%s:%s}%s' % (peername[0], peername[1], data))
                                 print(data, end='')
                     else:
                         # remove broken socket
@@ -68,7 +68,7 @@ def chat_server():
 def send_user_info(c_sock, s_sock):
     info_string = '/userinfo '
     for addr in USER_NAMES:
-        info_string += '[%s,%s,%s]' % (addr, USER_NAMES[addr], USER_COLORS[addr])
+        info_string += '[%s,%s]' % (addr, USER_COLORS[addr])
     direct_message(c_sock, info_string, s_sock)
 
 
@@ -107,10 +107,14 @@ def change_name(name, c_sock, s_sock):
 
 # Allows user to change the color of their display name
 def change_color(color, c_sock, s_sock):
-    if USER_COLORS['%s:%s' % c_sock.getpeername()] is not None:
-        broadcast(s_sock, '%s changed his color\n' % USER_NAMES['%s:%s' % c_sock.getpeername()])
-    USER_COLORS['%s:%s' % c_sock.getpeername()] = color
-    print('%s changed his color' % USER_NAMES['%s:%s' % c_sock.getpeername()])
+    peername = c_sock.getpeername()
+    if USER_COLORS['%s:%s' % peername] is not None:
+        broadcast(s_sock, '%s changed his color\n' % USER_NAMES['%s:%s' % peername])
+        print('%s changed his color' % USER_NAMES['%s:%s' % peername])
+    else:
+        print('%s set his color' % USER_NAMES['%s:%s' % peername])
+    USER_COLORS['%s:%s' % peername] = color
+    broadcast(s_sock, '/userinfo [%s:%s,%s]' % (peername[0], peername[1], color))
 
 
 # Allows user to send direct message to another user
@@ -122,8 +126,8 @@ def send_whisper(c_sock, s_sock, user, message):
             if u_sock != s_sock:
                 if '%s:%s' % u_sock.getpeername() == address:
                     sender = USER_NAMES['%s:%s' % c_sock.getpeername()]
-                    direct_message(u_sock, '{%s -> %s} %s\n' % (sender, user, message), s_sock)
-                    direct_message(c_sock, '{%s -> %s} %s\n' % (sender, user, message), s_sock)
+                    direct_message(u_sock, '(%s -> %s) %s\n' % (sender, user, message), s_sock)
+                    direct_message(c_sock, '(%s -> %s) %s\n' % (sender, user, message), s_sock)
                     print('{%s -> %s} %s\n' % (sender, user, message))
     else:
         direct_message(c_sock, '\tThere is no user named \"%s\" on this server.\n' % user, s_sock)

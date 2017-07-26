@@ -13,7 +13,6 @@ PORT = 9069
 sock = None
 connected = False
 connection_thread = None
-CONNECTED_USERS = {}
 
 
 # Attempts to connect to host and starts new thread on success
@@ -29,6 +28,7 @@ def connect_to_server():
         sock.connect((HOST, PORT))
         append_to_log('Connected to %s\n' % HOST)
         sock.send(bytes('/name %s\n' % USER_NAME, encoding='UTF-8'))
+        time.sleep(0.1)
         sock.send(bytes('/color %s' % USER_COLOR, encoding='UTF-8'))
         connected = True
         # Start listening to server in separate thread
@@ -57,14 +57,12 @@ def parse_user_info(user_info):
         address = user_info[start:comma]
 
         start = comma + 1
-        comma = user_info.find(',', start)
-        name = user_info[start:comma]
-
-        start = comma + 1
         end = user_info.find(']', start)
         color = user_info[start:end]
 
-        CONNECTED_USERS[address] = (name, color)
+        if color == 'None':
+            color = '#ffffff'
+
         log.tag_configure(address, foreground=color)
 
 
@@ -72,11 +70,20 @@ def parse_user_info(user_info):
 def append_to_log(msg):
     log.configure(state='normal')
     # Color user names
-    if msg[0] == '[':
-        index = msg.find(' ')
-        name = msg[0:index]
-        msg = msg[index:]
-        log.insert('end', name, 'user') # add multiple colors
+    if msg[0] == '{':   # Message from user relayed by server
+        addr_end = msg.find('}')
+        addr = msg[1:addr_end]
+
+        name_end = msg.find(' ')
+        name = msg[addr_end+1:name_end]
+        msg = msg[name_end:]
+        log.insert('end', name, addr)  # add multiple colors
+        log.insert('end', msg)
+    elif msg[0] == '[':     # Message posted by offline client user
+        name_end = msg.find(' ')
+        name = msg[0:name_end]
+        msg = msg[name_end:]
+        log.insert('end', name, 'user')  # add multiple colors
         log.insert('end', msg)
     else:
         log.insert('end', msg)
@@ -134,14 +141,16 @@ def change_color(color):
         try:
             int(color, 16)  # throws exception if color is not in hex form
             USER_COLOR = '#%s' % color
-            sock.send(bytes('/color %s' % USER_COLOR, encoding='UTF-8'))
+            if connected:
+                sock.send(bytes('/color %s' % USER_COLOR, encoding='UTF-8'))
         except:
             append_to_log('Incorrect format, make sure your color is in hex-code form.\n')
     elif len(color) == 7 and color[0] == '#':
         try:
             int(color[1:], 16)  # throws exception if color is not in hex form
             USER_COLOR = color
-            sock.send(bytes('/color %s' % USER_COLOR, encoding='UTF-8'))
+            if connected:
+                sock.send(bytes('/color %s' % USER_COLOR, encoding='UTF-8'))
         except:
             append_to_log('Incorrect format, make sure your color is in hex-code form.\n')
     else:
@@ -229,8 +238,8 @@ def listen_to_server():
             if not data:
                 append_to_log('Server has disconnected\n')
                 connected = False
-            elif data[:9] == '/userinfo':
-                parse_user_info(data)
+            elif data[:9] == b'/userinfo':
+                parse_user_info(data.decode(encoding='UTF-8'))
             else:
                 append_to_log(data.decode(encoding='UTF-8'))
         except socket.timeout:
@@ -268,7 +277,10 @@ root = tkinter.Tk()
 root.minsize(200, 300)
 root.bind('<Return>', send_message)
 root.protocol('WM_DELETE_WINDOW', on_exit)
-root.iconbitmap('netrun.ico')
+try:
+    root.iconbitmap('netrun.ico')
+except:
+    print('Error: Missing icon image.')
 chat_title = '\uff2e\uff25\uff34\uff32\uff35\uff2e\uff0d\uff43\uff48\uff41\uff54'   # NETRUN-chat in full width chars
 root.wm_title(chat_title)
 
