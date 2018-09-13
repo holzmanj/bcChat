@@ -5,6 +5,8 @@ import time
 import traceback
 import configparser
 import os
+import random
+import des
 
 USER_NAME = 'user'
 USER_COLOR = '#ffffff'
@@ -14,6 +16,54 @@ sock = None
 connected = False
 connection_thread = None
 
+# Bitwise helper methods
+def val_to_bitstr(val, n):
+    bits = bin(val)[2:]
+    while len(bits) < n:
+        bits = '0' + bits
+    return bits
+
+def str_to_bits(str):
+    bit_list = []
+    for c in str:
+        bit_list += [int(x) for x in val_to_bitstr(ord(c), 8)]
+    return bit_list
+
+def bits_to_str(bit_list):
+    str = ''
+    chars = int(len(bit_list) / 8)
+    for c in range(chars):
+        start_ix = c * 8
+        stop_ix = (c + 1) * 8
+        l = bit_list[start_ix:stop_ix]
+        bitstr = ''
+        for bit in l:
+            if bit == 1:
+                bitstr += '1'
+            else:
+                bitstr += '0'
+        str += chr(int(bitstr, 2))
+
+    return str
+
+def bits_to_hex(bits):
+    while len(bits) % 8 != 0:
+        bits = bits + [0]
+    hexstr = ''
+    for byte in des.blockify(bits, 8):
+        byte = ''.join(map(str, byte))
+        h = hex(int(byte, 2))[2:]
+        if len(h) == 1:
+            h = '0' + h
+        hexstr += h
+    return hexstr
+
+def hex_to_bits(hexstr):
+    bits = []
+    nibbles = [int(c, 16) for c in hexstr]
+    for n in nibbles:
+        bits += [int(b) for b in val_to_bitstr(n, 4)]
+    return bits
 
 # Attempts to connect to host and starts new thread on success
 def connect_to_server():
@@ -111,6 +161,35 @@ def send_message(event):
 
     user_input.delete(0, len(msg))
 
+# Encrypts a message, outputs to user
+def encrypt_message(msg):
+    # Generate 64 bit private key
+    k = [0] * 64
+    for i in range(64):
+        if random.random() > 0.5:
+            k[i] = 1
+
+    cipher_text = des.encrypt(msg, k)
+    cipher_hex = bits_to_hex(str_to_bits(cipher_text))
+
+    root.clipboard_clear()
+    root.clipboard_append('%s %s' % (bits_to_hex(k), cipher_hex))
+
+    # Ouput encrypted message and key to user
+    append_to_log('Message: %s\nCipher: %s\n' % (msg, cipher_hex))
+    append_to_log('Key:    %s\n' % (bits_to_hex(k)))
+
+def decrypt_message(k, cipher_text):
+    try:
+        k = hex_to_bits(k)
+        cipher_text = bits_to_str(hex_to_bits(cipher_text))
+        msg = des.decrypt(cipher_text, k)
+    except Exception as e:
+        append_to_log('Decryption failed. "%s"\n' % e)
+        return
+
+    # Output decrypted message to user
+    append_to_log('Message: %s\n' % msg)
 
 # Sends private message to single user on server
 def send_whisper(user, message):
@@ -119,7 +198,6 @@ def send_whisper(user, message):
         sock.send(bytes('/whisper %s %s' % (user, message), encoding='UTF-8'))
     else:
         append_to_log('You are not connected to a server.\n')
-
 
 # Changes the user's display name
 def change_name(name):
@@ -176,7 +254,9 @@ def handle_command(command):
             append_to_log('For details about a specific command, enter /help <command>\n'
                           'Available commands:\n'
                           '\t/connect\n'
+                          '\t/decrypt\n'
                           '\t/disconnect\n'
+                          '\t/encrypt\n'
                           '\t/getusers\n'
                           '\t/name\n'
                           '\t/color\n'
@@ -194,6 +274,10 @@ def handle_command(command):
                 append_to_log('\t/getusers - gets list of all currently connected users on a server.\n')
             elif args[1] == 'whisper':
                 append_to_log('\t/whisper <user> <message> - sends a private message to another user.\n')
+            elif args[1] == 'encrypt':
+                append_to_log('\t/encrypt <message> - Returns a DES encrypted cipher and a corresponding key.\n')
+            elif args[1] == 'decrypt':
+                append_to_log('\t/decrypt <key> <cipher> - Decrypts cipher using key.\n')
             else:
                 append_to_log('Unknown command: %s\nRefer to /help for a list of commands.\n' % args[0])
     elif args[0] == 'connect':
@@ -225,6 +309,17 @@ def handle_command(command):
             send_whisper(args[1], command)
         else:
             append_to_log('Incorrect format.  Refer to /help for assistance.\n')
+    # Encrypts a message using DES
+    elif args[0] == 'encrypt':
+        if len(args) > 1:
+            encrypt_message(' '.join(args[1:]))
+        else:
+            append_to_log('Incorrect format. Refer to /help for assistance.\n')
+    elif args[0] == 'decrypt':
+        if len(args) > 2:
+            decrypt_message(args[1], ' '.join(args[2:]))
+        else:
+            append_to_log('Incorrect format. Refer to /help for assistance.\n')
     else:
         append_to_log('Unknown command: %s\nRefer to /help for a list of commands.\n' % args[0])
 
